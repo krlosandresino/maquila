@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Control de registros Maquila</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f6f8; padding: 20px; }
+    .card { max-width: 1000px; margin: auto; background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    h1 { text-align: center; margin-bottom: 5px; }
+    
+    /* ESTILO DEL RELOJ AGREGADO */
+    #reloj {
+        text-align: center;
+        font-size: 18px;
+        color: #1565c0; /* Azul oscuro */
+        font-weight: bold;
+        margin-bottom: 20px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .row { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; align-items: center; }
+    input, select { flex: 1; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; }
+    button { padding: 10px 15px; font-size: 16px; border: none; border-radius: 6px; cursor: pointer; transition: 0.3s; }
+    button:hover { opacity: 0.8; }
+    .in { background: #4CAF50; color: #fff; }
+    .out { background: #f44336; color: #fff; }
+    .xls { background: #1976d2; color: #fff; width: 100%; margin-bottom: 5px; }
+    .clear { background: #757575; color: #fff; width: 100%; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+    th { background: #f0f0f0; }
+    .status-msg { font-size: 12px; color: green; margin-top: 5px; display: none; }
+    
+    .pendiente { color: #d32f2f; font-style: italic; font-weight: bold; }
+    .completado { color: #388e3c; font-weight: bold; }
+
+    .contador-container {
+      margin-left: auto; 
+      background: #333;
+      color: #fff;
+      padding: 8px 15px;
+      border-radius: 5px;
+      font-weight: bold;
+      font-size: 14px;
+      min-width: 120px;
+      text-align: center;
+    }
+    #num-contador { font-size: 18px; color: #ffeb3b; margin-left: 5px; }
+  </style>
+</head>
+<body>
+
+  <audio id="snd-notif" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3"></audio>
+
+  <div class="card">
+    <h1>Control de asistencia Maquila</h1>
+    
+    <div id="reloj">Cargando fecha y hora...</div>
+
+    <p style="font-size: 14px; color: #555;">Suba la base de excel.</p>
+    <input type="file" id="archivoExcel" accept=".xlsx,.xls" />
+    <div id="msgCargado" class="status-msg">✓ Lista de empleados cargada</div>
+
+    <div class="row" style="margin-top: 15px;">
+      <input type="text" id="cedula" placeholder="Ingrese número de cédula" autofocus />
+      <input type="text" id="nombre" placeholder="Nombre del empleado" readonly />
+      <select id="procedencia">
+        <option value="" disabled selected>Seleccione Maquila (Solo Ingreso)</option>
+        <option value="Dprisa">Dprisa</option>
+        <option value="Seripro">Seripro</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <button class="in" onclick="registrar('Ingreso')">Registrar Ingreso</button>
+      <button class="out" onclick="registrar('Salida')">Registrar Salida</button>
+      <div class="contador-container">
+        Ingresados hoy: <span id="num-contador">0</span>
+      </div>
+    </div>
+
+    <button class="xls" onclick="descargarExcel()">Descargar reporte</button>
+    <button class="clear" onclick="limpiarRegistros()">Limpiar historial</button>
+
+    <table id="tabla">
+      <thead>
+        <tr>
+          <th>Cédula</th>
+          <th>Nombre</th>
+          <th>Maquila</th>
+          <th>Fecha</th>
+          <th>Ingreso</th>
+          <th>Salida</th>
+          <th>Tiempo Laborado</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script>
+    let empleados = JSON.parse(localStorage.getItem('empleadosDb')) || {};
+    let registros = JSON.parse(localStorage.getItem('registrosUnificados')) || [];
+
+    const sound = document.getElementById('snd-notif');
+
+    // LÓGICA DEL RELOJ EN VIVO
+    function actualizarReloj() {
+        const ahora = new Date();
+        const opciones = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+        // Primera letra mayúscula para el día
+        let fechaTexto = ahora.toLocaleDateString('es-ES', opciones);
+        fechaTexto = fechaTexto.charAt(0).toUpperCase() + fechaTexto.slice(1);
+        
+        document.getElementById('reloj').innerText = fechaTexto;
+    }
+    // Actualizar cada segundo
+    setInterval(actualizarReloj, 1000);
+
+    window.onload = () => {
+        if (Object.keys(empleados).length > 0) document.getElementById('msgCargado').style.display = 'block';
+        renderizarTabla();
+        actualizarContador();
+        actualizarReloj(); // Ejecutar inmediatamente al cargar
+    };
+
+    document.getElementById('archivoExcel').addEventListener('change', function(e) {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const data = new Uint8Array(evt.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+        empleados = {};
+        json.forEach(row => {
+            if(row.Cedula) empleados[row.Cedula.toString().trim()] = row.Nombre;
+        });
+        localStorage.setItem('empleadosDb', JSON.stringify(empleados));
+        document.getElementById('msgCargado').style.display = 'block';
+        alert('Base de datos cargada');
+      };
+      reader.readAsArrayBuffer(e.target.files[0]);
+    });
+
+    document.getElementById('cedula').addEventListener('input', function() {
+      document.getElementById('nombre').value = empleados[this.value.trim()] || '';
+    });
+
+    function actualizarContador() {
+        const fechaHoy = new Date().toLocaleDateString();
+        const totalHoy = registros.filter(r => r.fecha === fechaHoy).length;
+        document.getElementById('num-contador').innerText = totalHoy;
+    }
+
+    function registrar(accion) {
+      const cedula = document.getElementById('cedula').value.trim();
+      const nombre = document.getElementById('nombre').value.trim();
+      const procedenciaSeleccionada = document.getElementById('procedencia').value;
+      
+      const ahora = new Date();
+      const fechaHoy = ahora.toLocaleDateString();
+      const horaActualStr = ahora.toLocaleTimeString();
+
+      if (!cedula || !nombre) {
+        sound.play();
+        alert('Cédula no válida');
+        return;
+      }
+
+      const indiceRegistro = registros.findIndex(r => r.cedula === cedula && r.fecha === fechaHoy);
+
+      if (accion === 'Ingreso') {
+          if (!procedenciaSeleccionada) {
+              sound.play();
+              alert('Debe seleccionar la procedencia para el INGRESO.');
+              return;
+          }
+
+          if (indiceRegistro !== -1) {
+              sound.play();
+              alert('Esta persona YA tiene un ingreso registrado el día de hoy.');
+              return;
+          }
+
+          registros.push({
+              cedula,
+              nombre,
+              procedencia: procedenciaSeleccionada,
+              fecha: fechaHoy,
+              horaIngreso: horaActualStr,
+              horaSalida: 'Pendiente',
+              tiempoLaborado: 'En curso',
+              timestampIngreso: ahora.getTime()
+          });
+
+      } else if (accion === 'Salida') {
+          if (indiceRegistro === -1) {
+              sound.play();
+              alert('No existe registro de INGRESO hoy.');
+              return;
+          }
+
+          const registroActual = registros[indiceRegistro];
+
+          if (registroActual.horaSalida !== 'Pendiente') {
+              sound.play();
+              alert('Esta persona YA marcó su salida el día de hoy.');
+              return;
+          }
+
+          const msIngreso = registroActual.timestampIngreso;
+          const diffMs = ahora.getTime() - msIngreso;
+          const diffHrs = Math.floor(diffMs / 3600000);
+          const diffMins = Math.floor((diffMs % 3600000) / 60000);
+          
+          registroActual.horaSalida = horaActualStr;
+          registroActual.tiempoLaborado = `${diffHrs}h ${diffMins}m`;
+      }
+
+      localStorage.setItem('registrosUnificados', JSON.stringify(registros));
+      sound.play();
+      renderizarTabla();
+      actualizarContador();
+      
+      document.getElementById('cedula').value = '';
+      document.getElementById('nombre').value = '';
+      document.getElementById('procedencia').value = '';
+      document.getElementById('cedula').focus();
+    }
+
+    function renderizarTabla() {
+        const tbody = document.querySelector('#tabla tbody');
+        tbody.innerHTML = registros.slice().reverse().map(reg => {
+            const claseSalida = reg.horaSalida === 'Pendiente' ? 'pendiente' : 'completado';
+            return `
+            <tr>
+                <td>${reg.cedula}</td>
+                <td>${reg.nombre}</td>
+                <td>${reg.procedencia}</td>
+                <td>${reg.fecha}</td>
+                <td style="color:green; font-weight:bold;">${reg.horaIngreso}</td>
+                <td class="${claseSalida}">${reg.horaSalida}</td>
+                <td style="font-weight:bold;">${reg.tiempoLaborado}</td>
+            </tr>
+        `}).join('');
+    }
+
+    function descargarExcel() {
+      const wb = XLSX.utils.table_to_book(document.getElementById('tabla'), { sheet: 'Asistencia' });
+      XLSX.writeFile(wb, 'reporte_maquila.xlsx');
+    }
+
+    function limpiarRegistros() {
+        if (confirm('¿Borrar todo el historial?')) {
+            registros = [];
+            localStorage.removeItem('registrosUnificados');
+            renderizarTabla();
+            actualizarContador();
+        }
+    }
+  </script>
+</body>
+</html>
