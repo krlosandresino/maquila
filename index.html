@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Control Maquila - ONLINE</title>
+  <title>Control de registros Maquila</title>
   
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   
@@ -54,7 +54,7 @@
   <audio id="snd-notif" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3"></audio>
 
   <div class="card">
-    <h1>Control de asistencia Maquila (Nube)</h1>
+    <h1>Control de asistencia Maquila</h1>
     <div id="db-status">Iniciando sistema...</div>
     
     <div id="reloj">--:--:--</div>
@@ -82,7 +82,7 @@
     </div>
 
     <button class="xls" onclick="descargarExcel()">Descargar reporte</button>
-    <button class="clear" onclick="limpiarRegistros()">Limpiar historial (Nube)</button>
+    <button class="clear" onclick="limpiarRegistros()">Limpiar historial</button>
 
     <table id="tabla">
       <thead>
@@ -141,7 +141,7 @@
         if (data) {
             empleadosLocal = data;
             document.getElementById('msgCargado').style.display = 'block';
-            document.getElementById('msgCargado').innerText = "✓ Lista de empleados sincronizada (" + Object.keys(data).length + ")";
+            document.getElementById('msgCargado').innerText = "✓ Lista de empleados sincronizada (" + Object.keys(data).length + ") personas";
         } else {
             empleadosLocal = {};
         }
