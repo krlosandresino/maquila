@@ -3,21 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Control de registros Maquila</title>
+  <title>Control Maquila - ONLINE</title>
+  
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
+
   <style>
     body { font-family: Arial, sans-serif; background: #f4f6f8; padding: 20px; }
     .card { max-width: 1000px; margin: auto; background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
     h1 { text-align: center; margin-bottom: 5px; }
     
-    /* ESTILO DEL RELOJ AGREGADO */
     #reloj {
-        text-align: center;
-        font-size: 18px;
-        color: #1565c0; /* Azul oscuro */
-        font-weight: bold;
-        margin-bottom: 20px;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        text-align: center; font-size: 18px; color: #1565c0; font-weight: bold;
+        margin-bottom: 20px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
 
     .row { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; align-items: center; }
@@ -28,26 +28,25 @@
     .out { background: #f44336; color: #fff; }
     .xls { background: #1976d2; color: #fff; width: 100%; margin-bottom: 5px; }
     .clear { background: #757575; color: #fff; width: 100%; }
+    
     table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px; }
     th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
     th { background: #f0f0f0; }
-    .status-msg { font-size: 12px; color: green; margin-top: 5px; display: none; }
     
+    .status-msg { font-size: 12px; color: green; margin-top: 5px; display: none; }
     .pendiente { color: #d32f2f; font-style: italic; font-weight: bold; }
     .completado { color: #388e3c; font-weight: bold; }
 
     .contador-container {
-      margin-left: auto; 
-      background: #333;
-      color: #fff;
-      padding: 8px 15px;
-      border-radius: 5px;
-      font-weight: bold;
-      font-size: 14px;
-      min-width: 120px;
-      text-align: center;
+      margin-left: auto; background: #333; color: #fff; padding: 8px 15px;
+      border-radius: 5px; font-weight: bold; font-size: 14px; min-width: 120px; text-align: center;
     }
     #num-contador { font-size: 18px; color: #ffeb3b; margin-left: 5px; }
+    
+    /* Indicador de conexión */
+    #db-status { text-align: center; font-size: 12px; margin-bottom: 10px; color: #666; }
+    .online { color: green; font-weight: bold; }
+    .offline { color: red; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -55,13 +54,14 @@
   <audio id="snd-notif" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3"></audio>
 
   <div class="card">
-    <h1>Control de asistencia Maquila</h1>
+    <h1>Control de asistencia Maquila (Nube)</h1>
+    <div id="db-status">Iniciando sistema...</div>
     
-    <div id="reloj">Cargando fecha y hora...</div>
+    <div id="reloj">--:--:--</div>
 
-    <p style="font-size: 14px; color: #555;">Suba la base de excel.</p>
+    <p style="font-size: 14px; color: #555;">Suba la base de empleados (Solo es necesario hacerlo una vez o al actualizar personal).</p>
     <input type="file" id="archivoExcel" accept=".xlsx,.xls" />
-    <div id="msgCargado" class="status-msg">✓ Lista de empleados cargada</div>
+    <div id="msgCargado" class="status-msg">✓ Lista de empleados disponible</div>
 
     <div class="row" style="margin-top: 15px;">
       <input type="text" id="cedula" placeholder="Ingrese número de cédula" autofocus />
@@ -82,7 +82,7 @@
     </div>
 
     <button class="xls" onclick="descargarExcel()">Descargar reporte</button>
-    <button class="clear" onclick="limpiarRegistros()">Limpiar historial</button>
+    <button class="clear" onclick="limpiarRegistros()">Limpiar historial (Nube)</button>
 
     <table id="tabla">
       <thead>
@@ -101,55 +101,112 @@
   </div>
 
   <script>
-    let empleados = JSON.parse(localStorage.getItem('empleadosDb')) || {};
-    let registros = JSON.parse(localStorage.getItem('registrosUnificados')) || [];
+    // --- 1. TU CONFIGURACIÓN DE FIREBASE ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyA3pJXgmnpeTOH4OG9EV_oPMg-Ga5tnRdc",
+      authDomain: "controlmaquila.firebaseapp.com",
+      databaseURL: "https://controlmaquila-default-rtdb.firebaseio.com",
+      projectId: "controlmaquila",
+      storageBucket: "controlmaquila.firebasestorage.app",
+      messagingSenderId: "201607113758",
+      appId: "1:201607113758:web:d286dcbcb04a0bcee6520f"
+    };
 
+    // Inicializar Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    
+    const refEmpleados = db.ref('empleados');
+    const refRegistros = db.ref('registros');
+
+    let empleadosLocal = {};
+    let registrosLocal = [];
     const sound = document.getElementById('snd-notif');
 
-    // LÓGICA DEL RELOJ EN VIVO
+    // --- 2. MONITOREO DE CONEXIÓN Y DATOS ---
+    
+    // Estado de conexión
+    db.ref('.info/connected').on('value', function(snap) {
+      const statusEl = document.getElementById('db-status');
+      if (snap.val() === true) {
+        statusEl.innerHTML = 'Estado: <span class="online">● Conectado a la Nube</span>';
+      } else {
+        statusEl.innerHTML = 'Estado: <span class="offline">○ Desconectado (Revisar internet)</span>';
+      }
+    });
+
+    // Escuchar cambios en Empleados (Carga automática)
+    refEmpleados.on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            empleadosLocal = data;
+            document.getElementById('msgCargado').style.display = 'block';
+            document.getElementById('msgCargado').innerText = "✓ Lista de empleados sincronizada (" + Object.keys(data).length + ")";
+        } else {
+            empleadosLocal = {};
+        }
+    });
+
+    // Escuchar cambios en Registros (Actualización en tiempo real)
+    refRegistros.on('value', (snapshot) => {
+        const data = snapshot.val();
+        registrosLocal = [];
+        
+        if (data) {
+            // Convertir objeto de Firebase a Array
+            Object.keys(data).forEach(key => {
+                registrosLocal.push({
+                    idFirebase: key,
+                    ...data[key]
+                });
+            });
+        }
+        renderizarTabla();
+        actualizarContador();
+    });
+
+    // --- 3. RELOJ ---
     function actualizarReloj() {
         const ahora = new Date();
         const opciones = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
-        // Primera letra mayúscula para el día
         let fechaTexto = ahora.toLocaleDateString('es-ES', opciones);
         fechaTexto = fechaTexto.charAt(0).toUpperCase() + fechaTexto.slice(1);
-        
         document.getElementById('reloj').innerText = fechaTexto;
     }
-    // Actualizar cada segundo
     setInterval(actualizarReloj, 1000);
+    actualizarReloj();
 
-    window.onload = () => {
-        if (Object.keys(empleados).length > 0) document.getElementById('msgCargado').style.display = 'block';
-        renderizarTabla();
-        actualizarContador();
-        actualizarReloj(); // Ejecutar inmediatamente al cargar
-    };
-
+    // --- 4. SUBIDA DE EXCEL (EMPLEADOS) ---
     document.getElementById('archivoExcel').addEventListener('change', function(e) {
       const reader = new FileReader();
       reader.onload = (evt) => {
         const data = new Uint8Array(evt.target.result);
         const workbook = XLSX.read(data, { type: 'array' });
         const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-        empleados = {};
+        
+        let nuevosEmpleados = {};
         json.forEach(row => {
-            if(row.Cedula) empleados[row.Cedula.toString().trim()] = row.Nombre;
+            if(row.Cedula) nuevosEmpleados[row.Cedula.toString().trim()] = row.Nombre;
         });
-        localStorage.setItem('empleadosDb', JSON.stringify(empleados));
-        document.getElementById('msgCargado').style.display = 'block';
-        alert('Base de datos cargada');
+
+        // Guardar en la nube
+        refEmpleados.set(nuevosEmpleados)
+            .then(() => alert('Base de empleados actualizada en la nube correctamente.'))
+            .catch(err => alert('Error al subir: ' + err.message));
       };
       reader.readAsArrayBuffer(e.target.files[0]);
     });
 
+    // Autocompletar nombre al escribir cédula
     document.getElementById('cedula').addEventListener('input', function() {
-      document.getElementById('nombre').value = empleados[this.value.trim()] || '';
+      const val = this.value.trim();
+      document.getElementById('nombre').value = empleadosLocal[val] || '';
     });
 
+    // --- 5. LÓGICA DE REGISTRO ---
     function actualizarContador() {
         const fechaHoy = new Date().toLocaleDateString();
-        const totalHoy = registros.filter(r => r.fecha === fechaHoy).length;
+        const totalHoy = registrosLocal.filter(r => r.fecha === fechaHoy).length;
         document.getElementById('num-contador').innerText = totalHoy;
     }
 
@@ -162,28 +219,26 @@
       const fechaHoy = ahora.toLocaleDateString();
       const horaActualStr = ahora.toLocaleTimeString();
 
-      if (!cedula || !nombre) {
-        sound.play();
-        alert('Cédula no válida');
-        return;
+      if (!cedula) {
+        alert('Ingrese una cédula'); return;
+      }
+      if (!nombre) {
+        sound.play(); alert('Empleado no encontrado en la base de datos.'); return;
       }
 
-      const indiceRegistro = registros.findIndex(r => r.cedula === cedula && r.fecha === fechaHoy);
+      // Buscar registro existente HOY
+      const registroExistente = registrosLocal.find(r => r.cedula === cedula && r.fecha === fechaHoy);
 
       if (accion === 'Ingreso') {
           if (!procedenciaSeleccionada) {
-              sound.play();
-              alert('Debe seleccionar la procedencia para el INGRESO.');
-              return;
+              sound.play(); alert('Seleccione procedencia (Maquila).'); return;
           }
 
-          if (indiceRegistro !== -1) {
-              sound.play();
-              alert('Esta persona YA tiene un ingreso registrado el día de hoy.');
-              return;
+          if (registroExistente) {
+              sound.play(); alert('Error: Ya tiene INGRESO registrado hoy.'); return;
           }
 
-          registros.push({
+          const nuevoRegistro = {
               cedula,
               nombre,
               procedencia: procedenciaSeleccionada,
@@ -192,37 +247,35 @@
               horaSalida: 'Pendiente',
               tiempoLaborado: 'En curso',
               timestampIngreso: ahora.getTime()
-          });
+          };
+          
+          // Enviar a Firebase
+          refRegistros.push(nuevoRegistro).catch(err => alert("Error de red: " + err.message));
 
       } else if (accion === 'Salida') {
-          if (indiceRegistro === -1) {
-              sound.play();
-              alert('No existe registro de INGRESO hoy.');
-              return;
+          if (!registroExistente) {
+              sound.play(); alert('Error: No tiene registro de entrada hoy.'); return;
           }
 
-          const registroActual = registros[indiceRegistro];
-
-          if (registroActual.horaSalida !== 'Pendiente') {
-              sound.play();
-              alert('Esta persona YA marcó su salida el día de hoy.');
-              return;
+          if (registroExistente.horaSalida !== 'Pendiente') {
+              sound.play(); alert('Error: Ya marcó SALIDA hoy.'); return;
           }
 
-          const msIngreso = registroActual.timestampIngreso;
+          const msIngreso = registroExistente.timestampIngreso;
           const diffMs = ahora.getTime() - msIngreso;
           const diffHrs = Math.floor(diffMs / 3600000);
           const diffMins = Math.floor((diffMs % 3600000) / 60000);
           
-          registroActual.horaSalida = horaActualStr;
-          registroActual.tiempoLaborado = `${diffHrs}h ${diffMins}m`;
+          // Actualizar en Firebase
+          db.ref('registros/' + registroExistente.idFirebase).update({
+              horaSalida: horaActualStr,
+              tiempoLaborado: `${diffHrs}h ${diffMins}m`
+          }).catch(err => alert("Error de red: " + err.message));
       }
 
-      localStorage.setItem('registrosUnificados', JSON.stringify(registros));
       sound.play();
-      renderizarTabla();
-      actualizarContador();
       
+      // Limpiar campos
       document.getElementById('cedula').value = '';
       document.getElementById('nombre').value = '';
       document.getElementById('procedencia').value = '';
@@ -231,7 +284,7 @@
 
     function renderizarTabla() {
         const tbody = document.querySelector('#tabla tbody');
-        tbody.innerHTML = registros.slice().reverse().map(reg => {
+        tbody.innerHTML = registrosLocal.slice().reverse().map(reg => {
             const claseSalida = reg.horaSalida === 'Pendiente' ? 'pendiente' : 'completado';
             return `
             <tr>
@@ -247,16 +300,18 @@
     }
 
     function descargarExcel() {
-      const wb = XLSX.utils.table_to_book(document.getElementById('tabla'), { sheet: 'Asistencia' });
-      XLSX.writeFile(wb, 'reporte_maquila.xlsx');
+      // Filtrar datos para que no salga el ID interno de firebase
+      const datosParaExcel = registrosLocal.map(({idFirebase, timestampIngreso, ...resto}) => resto);
+      
+      const ws = XLSX.utils.json_to_sheet(datosParaExcel);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Asistencia");
+      XLSX.writeFile(wb, 'reporte_maquila_online.xlsx');
     }
 
     function limpiarRegistros() {
-        if (confirm('¿Borrar todo el historial?')) {
-            registros = [];
-            localStorage.removeItem('registrosUnificados');
-            renderizarTabla();
-            actualizarContador();
+        if (confirm('⚠️ PELIGRO: Esto borrará el historial de la NUBE para TODOS.\n¿Continuar?')) {
+            refRegistros.remove();
         }
     }
   </script>
