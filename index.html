@@ -312,9 +312,54 @@
 
     function limpiarRegistros() {
         if (confirm('⚠️ PELIGRO: Esto borrará el historial de la NUBE para TODOS.\n¿Continuar?')) {
-            refRegistros.remove();
+            const clave = prompt('Ingrese la clave de seguridad para confirmar el borrado:');
+            if (clave === 'Oriflame2026') {
+                refRegistros.remove();
+            } else {
+                alert('Clave incorrecta. Operación cancelada.');
+            }
         }
     }
+
+    // --- 6. BLOQUEOS DE SEGURIDAD SOLICITADOS ---
+    
+    // Deshabilitar Clic Derecho totalmente
+    document.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+    });
+
+    // Bloquear combinaciones de teclado específicas (F12, Ctrl+U, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+S)
+    document.addEventListener('keydown', function(e) {
+        // Bloquear F12
+        if (e.key === 'F12' || e.keyCode === 123) {
+            e.preventDefault();
+            return false;
+        }
+
+        // Bloquear Ctrl + U
+        if (e.ctrlKey && (e.key === 'u' || e.key === 'U' || e.keyCode === 85)) {
+            e.preventDefault();
+            return false;
+        }
+
+        // Bloquear Ctrl + Shift + I
+        if (e.ctrlKey && e.shiftKey && (e.key === 'i' || e.key === 'I' || e.keyCode === 73)) {
+            e.preventDefault();
+            return false;
+        }
+
+        // Bloquear Ctrl + Shift + J
+        if (e.ctrlKey && e.shiftKey && (e.key === 'j' || e.key === 'J' || e.keyCode === 74)) {
+            e.preventDefault();
+            return false;
+        }
+
+        // Bloquear Ctrl + S
+        if (e.ctrlKey && (e.key === 's' || e.key === 'S' || e.keyCode === 83)) {
+            e.preventDefault();
+            return false;
+        }
+    });
   </script>
 </body>
 </html>
