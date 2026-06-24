@@ -307,11 +307,11 @@
       const ws = XLSX.utils.json_to_sheet(datosParaExcel);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Asistencia");
-      XLSX.writeFile(wb, 'reporte_maquila_online.xlsx');
+      XLSX.writeFile(wb, 'marcaciones_maquila.xlsx');
     }
 
     function limpiarRegistros() {
-        if (confirm('⚠️ PELIGRO: Esto borrará el historial de la NUBE para TODOS.\n¿Continuar?')) {
+        if (confirm('⚠️ PELIGRO: Esto borrará el historial de la NUBE.\n¿Continuar?')) {
             const clave = prompt('Ingrese la clave de seguridad para confirmar el borrado:');
             if (clave === 'Oriflame2026') {
                 refRegistros.remove();
