@@ -69,9 +69,9 @@
       <select id="procedencia">
         <option value="" disabled selected>Seleccione Maquila (Solo Ingreso)</option>
         <option value="Dprisa">Dprisa</option>
-        <option value="Seripro">Seripro</option>
         <option value="H&T">H&T</option>
-        <option value="Otros">Otros</option>
+ 	<option value="Seripro">Seripro</option>
+	<option value="Otros">Otros</option>
       </select>
     </div>
 
@@ -312,8 +312,8 @@
     }
 
     function limpiarRegistros() {
-        if (confirm('⚠️ PELIGRO: Esto borrará el historial de la NUBE.\n¿Continuar?')) {
-            const clave = prompt('Ingrese la clave de seguridad para confirmar el borrado:');
+        if (confirm('Desea borrar los registros.\n¿Continuar?')) {
+            const clave = prompt('Ingrese la clave de seguridad:');
             if (clave === 'Oriflame2026') {
                 refRegistros.remove();
             } else {
