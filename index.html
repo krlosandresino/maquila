@@ -47,6 +47,34 @@
     #db-status { text-align: center; font-size: 12px; margin-bottom: 10px; color: #666; }
     .online { color: green; font-weight: bold; }
     .offline { color: red; font-weight: bold; }
+
+    /* MODIFICADO: Estilo compacto para que haga juego con los demás botones del panel */
+    input[type="file"] {
+        flex: none; /* Evita que se estire ocupando todo el ancho (espaciado excesivo) */
+        width: auto;
+        padding: 0; /* Elimina el relleno gordo que heredaba del buscador de cédula */
+        font-size: 13px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        background: #fff;
+        color: #555;
+        cursor: pointer;
+        overflow: hidden;
+    }
+    input[type="file"]::file-selector-button {
+        background: #607d8b; /* Color que hace juego con "Descargar Respaldo" */
+        color: white;
+        border: none;
+        border-right: 1px solid #ccc;
+        padding: 8px 12px; /* Mismo tamaño de los botones naranjas y grises */
+        cursor: pointer;
+        font-size: 13px;
+        margin-right: 10px;
+        transition: 0.3s;
+    }
+    input[type="file"]::file-selector-button:hover {
+        opacity: 0.8;
+    }
   </style>
 </head>
 <body>
@@ -59,9 +87,22 @@
     
     <div id="reloj">--:--:--</div>
 
-    <p style="font-size: 14px; color: #555;">Suba la base de empleados (Solo es necesario hacerlo una vez o al actualizar personal).</p>
-    <input type="file" id="archivoExcel" accept=".xlsx,.xls" />
-    <div id="msgCargado" class="status-msg">✓ Lista de empleados disponible</div>
+    <!-- Panel de Control oculto -->
+    <button onclick="togglePanel()" style="background: #e0e0e0; color: #333; border: 1px solid #ccc; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-bottom: 10px; font-weight: bold;">⚙️ Panel de Control</button>
+
+    <div id="panel-oculto" style="display: none; background: #f9f9f9; padding: 15px; border: 1px dashed #ccc; border-radius: 5px; margin-bottom: 15px;">
+        <p style="font-size: 14px; color: #555; margin-top: 0;">Suba la base de empleados (Solo es necesario hacerlo una vez o al actualizar personal).</p>
+        
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+          <input type="file" id="archivoExcel" accept=".xlsx,.xls" />
+          <button style="background: #607d8b; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px;" onclick="descargarEmpleados()">📥 Descargar Respaldo Empleados</button>
+          
+          <!-- Nuevo botón añadido para Alta Rápida manual -->
+          <button style="background: #ff9800; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px;" onclick="altaRapida()">➕ Agregar Empleado Manualmente</button>
+        </div>
+        
+        <div id="msgCargado" class="status-msg">✓ Lista de empleados disponible</div>
+    </div>
 
     <div class="row" style="margin-top: 15px;">
       <input type="text" id="cedula" placeholder="Ingrese número de cédula" autofocus />
@@ -79,7 +120,6 @@
       <button class="in" onclick="registrar('Ingreso')">Registrar Ingreso</button>
       <button class="out" onclick="registrar('Salida')">Registrar Salida</button>
       
-      <!-- MODIFICADO: Agregado el contenedor para el Mini-Resumen -->
       <div class="contador-container">
         <div>Ingresados hoy: <span id="num-contador">0</span></div>
         <div id="resumen-maquila" style="font-size: 11px; font-weight: normal; color: #e0e0e0; margin-top: 4px; display: none;"></div>
@@ -91,7 +131,7 @@
       <button class="xls" style="flex: 1; width: auto; margin-bottom: 0; background-color: #0d47a1;" onclick="descargarExcel('pasadas')">Descargar historial PASADAS</button>
     </div>
     
-    <button class="clear" onclick="limpiarRegistros()">Limpiar historial</button>
+    <button class="clear" onclick="limpiarRegistros()">Limpiar Todo</button>
 
     <div style="overflow-x: auto;">
       <table id="tabla">
@@ -151,8 +191,11 @@
         const data = snapshot.val();
         if (data) {
             empleadosLocal = data;
-            document.getElementById('msgCargado').style.display = 'block';
-            document.getElementById('msgCargado').innerText = "✓ Lista de empleados sincronizada (" + Object.keys(data).length + ") personas";
+            const msgEl = document.getElementById('msgCargado');
+            if(msgEl) {
+                msgEl.style.display = 'block';
+                msgEl.innerText = "✓ Lista de empleados sincronizada (" + Object.keys(data).length + ") personas";
+            }
         } else {
             empleadosLocal = {};
         }
@@ -187,7 +230,17 @@
     setInterval(actualizarReloj, 1000);
     actualizarReloj();
 
-    // --- 4. SUBIDA DE EXCEL (EMPLEADOS) ---
+    // --- 4. SUBIDA Y DESCARGA DE EXCEL (EMPLEADOS) ---
+    
+    function togglePanel() {
+        const panel = document.getElementById('panel-oculto');
+        if (panel.style.display === 'none') {
+            panel.style.display = 'block';
+        } else {
+            panel.style.display = 'none';
+        }
+    }
+
     document.getElementById('archivoExcel').addEventListener('change', function(e) {
       const reader = new FileReader();
       reader.onload = (evt) => {
@@ -208,6 +261,64 @@
       reader.readAsArrayBuffer(e.target.files[0]);
     });
 
+    function descargarEmpleados() {
+        if (Object.keys(empleadosLocal).length === 0) {
+            alert('No hay empleados registrados en la base actual para descargar.');
+            return;
+        }
+
+        const clave = prompt('Ingrese la clave de seguridad para descargar el respaldo:');
+        
+        if (clave === 'Oriflame2026') {
+            const datosEmpleados = Object.keys(empleadosLocal).map(cedula => ({
+                Cedula: cedula,
+                Nombre: empleadosLocal[cedula]
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(datosEmpleados);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Base Empleados");
+            XLSX.writeFile(wb, 'respaldo_base_empleados.xlsx');
+        } else {
+            if (clave !== null) {
+                alert('Clave incorrecta. Operación cancelada.');
+            }
+        }
+    }
+
+    // Función añadida para dar de alta a un empleado manualmente en emergencias
+    function altaRapida() {
+        const nuevaCedula = prompt("Ingrese el número de cédula del nuevo empleado:");
+        
+        if (!nuevaCedula || nuevaCedula.trim() === "") {
+            return; // Si cancela o deja vacío, no hace nada
+        }
+        
+        const cedulaLimpia = nuevaCedula.trim();
+
+        if (empleadosLocal[cedulaLimpia]) {
+            alert("Este empleado ya existe en la base de datos: " + empleadosLocal[cedulaLimpia]);
+            return;
+        }
+
+        const nuevoNombre = prompt("Ingrese el nombre completo del empleado (Cédula: " + cedulaLimpia + "):");
+        
+        if (!nuevoNombre || nuevoNombre.trim() === "") {
+            return; 
+        }
+
+        const nombreLimpio = nuevoNombre.trim().toUpperCase();
+
+        // Enviar el nuevo empleado directamente al nodo 'empleados' de Firebase
+        db.ref('empleados/' + cedulaLimpia).set(nombreLimpio)
+            .then(() => {
+                alert("✅ Empleado agregado correctamente y sincronizado en la nube:\n\nCédula: " + cedulaLimpia + "\nNombre: " + nombreLimpio);
+            })
+            .catch(err => {
+                alert("Error al agregar empleado: " + err.message);
+            });
+    }
+
     // Autocompletar nombre al escribir cédula
     document.getElementById('cedula').addEventListener('input', function() {
       const val = this.value.trim();
@@ -216,15 +327,12 @@
 
     // --- 5. LÓGICA DE REGISTRO ---
     
-    // MODIFICADO: Lógica añadida para generar el desglose por maquila
     function actualizarContador() {
         const fechaHoy = new Date().toLocaleDateString();
         const registrosHoy = registrosLocal.filter(r => r.fecha === fechaHoy);
         
-        // Actualizar el número total de ingresados
         document.getElementById('num-contador').innerText = registrosHoy.length;
 
-        // Calcular fuerza laboral en piso (los que siguen con salida Pendiente)
         const enPiso = registrosHoy.filter(r => r.horaSalida === 'Pendiente');
         
         let dprisa = 0, ht = 0, seripro = 0, otros = 0;
@@ -238,10 +346,9 @@
 
         const resumenDiv = document.getElementById('resumen-maquila');
         
-        // Si hay alguien trabajando hoy, mostramos el texto
         if (registrosHoy.length > 0) {
             resumenDiv.style.display = 'block';
-            let texto = `En piso: Dprisa: ${dprisa} | H&T: ${ht} | Seripro: ${seripro}`;
+            let texto = `Proveedor: Dprisa: ${dprisa} | H&T: ${ht} | Seripro: ${seripro}`;
             if (otros > 0) texto += ` | Otros: ${otros}`;
             resumenDiv.innerText = texto;
         } else {
@@ -265,7 +372,6 @@
         sound.play(); alert('Empleado no encontrado en la base de datos.'); return;
       }
 
-      // Buscar registro existente HOY
       const registroExistente = registrosLocal.find(r => r.cedula === cedula && r.fecha === fechaHoy);
 
       if (accion === 'Ingreso') {
@@ -288,7 +394,6 @@
               timestampIngreso: ahora.getTime()
           };
           
-          // Enviar a Firebase
           refRegistros.push(nuevoRegistro).catch(err => alert("Error de red: " + err.message));
 
       } else if (accion === 'Salida') {
@@ -305,7 +410,6 @@
           const diffHrs = Math.floor(diffMs / 3600000);
           const diffMins = Math.floor((diffMs % 3600000) / 60000);
           
-          // Actualizar en Firebase
           db.ref('registros/' + registroExistente.idFirebase).update({
               horaSalida: horaActualStr,
               tiempoLaborado: `${diffHrs}h ${diffMins}m`
@@ -314,17 +418,15 @@
 
       sound.play();
       
-      // Limpiar campos
       document.getElementById('cedula').value = '';
       document.getElementById('nombre').value = '';
       document.getElementById('procedencia').value = '';
       document.getElementById('cedula').focus();
     }
 
-    // Sistema de cierre automático de turnos olvidados
     function verificarTurnosOlvidados() {
         const ahoraMs = new Date().getTime();
-        const limiteMs = 14 * 60 * 60 * 1000; // 14 horas en milisegundos
+        const limiteMs = 14 * 60 * 60 * 1000;
 
         registrosLocal.forEach(reg => {
             if (reg.horaSalida === 'Pendiente' && reg.timestampIngreso) {
@@ -337,25 +439,29 @@
             }
         });
     }
-    // Ejecutar la verificación automáticamente cada 60 segundos
     setInterval(verificarTurnosOlvidados, 60000);
 
-    // Separar registros del día a día de los pasados
     function renderizarTabla() {
         const tbody = document.querySelector('#tabla tbody');
         const fechaHoy = new Date().toLocaleDateString();
         
-        // Invertir el arreglo para mostrar los más recientes arriba
         const registrosReversos = registrosLocal.slice().reverse();
         
-        // Filtrar por los de hoy y los del pasado
         const registrosHoy = registrosReversos.filter(reg => reg.fecha === fechaHoy);
         const registrosPasados = registrosReversos.filter(reg => reg.fecha !== fechaHoy);
 
-        // Función auxiliar para mapear el HTML de las filas para no repetir código
         const mapearFila = (reg) => {
-            // Ajustamos la clase visual si dice "Sin Salida" para que se vea en rojo igual que "Pendiente"
             const claseSalida = (reg.horaSalida === 'Pendiente' || reg.horaSalida === 'Sin Salida') ? 'pendiente' : 'completado';
+            
+            let tiempoVisual = reg.tiempoLaborado;
+            if (reg.horaSalida === 'Pendiente' && reg.timestampIngreso) {
+                const ahoraMs = new Date().getTime();
+                const diffMs = ahoraMs - reg.timestampIngreso;
+                const diffHrs = Math.floor(diffMs / 3600000);
+                const diffMins = Math.floor((diffMs % 3600000) / 60000);
+                tiempoVisual = `⏱️ ${diffHrs}h ${diffMins}m`;
+            }
+
             return `
             <tr>
                 <td>${reg.cedula}</td>
@@ -364,15 +470,13 @@
                 <td>${reg.fecha}</td>
                 <td style="color:green; font-weight:bold;">${reg.horaIngreso}</td>
                 <td class="${claseSalida}">${reg.horaSalida}</td>
-                <td style="font-weight:bold;">${reg.tiempoLaborado}</td>
+                <td style="font-weight:bold;">${tiempoVisual}</td>
             </tr>
             `;
         };
 
-        // Construir el HTML de los de hoy
         let htmlFinal = registrosHoy.map(mapearFila).join('');
 
-        // Si hay registros pasados, insertar el separador y luego las filas pasadas
         if (registrosPasados.length > 0) {
             htmlFinal += `
             <tr>
@@ -386,7 +490,8 @@
         tbody.innerHTML = htmlFinal;
     }
 
-    // Filtrar los datos según el botón presionado
+    setInterval(renderizarTabla, 60000);
+
     function descargarExcel(tipo) {
       const fechaHoy = new Date().toLocaleDateString();
       let registrosFiltrados = [];
@@ -402,8 +507,13 @@
           return;
       }
 
-      // Filtrar datos para que no salga el ID interno de firebase
-      const datosParaExcel = registrosFiltrados.map(({idFirebase, timestampIngreso, ...resto}) => resto);
+      const datosParaExcel = registrosFiltrados.map(({idFirebase, timestampIngreso, ...resto}) => {
+          let tiempoLimpio = resto.tiempoLaborado;
+          if (resto.horaSalida === 'Pendiente') {
+              tiempoLimpio = "En curso";
+          }
+          return { ...resto, tiempoLaborado: tiempoLimpio };
+      });
       
       const ws = XLSX.utils.json_to_sheet(datosParaExcel);
       const wb = XLSX.utils.book_new();
@@ -426,38 +536,31 @@
 
     // --- 6. BLOQUEOS DE SEGURIDAD SOLICITADOS ---
     
-    // Deshabilitar Clic Derecho totalmente
     document.addEventListener('contextmenu', function(e) {
         e.preventDefault();
     });
 
-    // Bloquear combinaciones de teclado específicas (F12, Ctrl+U, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+S)
     document.addEventListener('keydown', function(e) {
-        // Bloquear F12
         if (e.key === 'F12' || e.keyCode === 123) {
             e.preventDefault();
             return false;
         }
 
-        // Bloquear Ctrl + U
         if (e.ctrlKey && (e.key === 'u' || e.key === 'U' || e.keyCode === 85)) {
             e.preventDefault();
             return false;
         }
 
-        // Bloquear Ctrl + Shift + I
         if (e.ctrlKey && e.shiftKey && (e.key === 'i' || e.key === 'I' || e.keyCode === 73)) {
             e.preventDefault();
             return false;
         }
 
-        // Bloquear Ctrl + Shift + J
         if (e.ctrlKey && e.shiftKey && (e.key === 'j' || e.key === 'J' || e.keyCode === 74)) {
             e.preventDefault();
             return false;
         }
 
-        // Bloquear Ctrl + S
         if (e.ctrlKey && (e.key === 's' || e.key === 'S' || e.keyCode === 83)) {
             e.preventDefault();
             return false;
