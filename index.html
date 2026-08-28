@@ -83,23 +83,29 @@
       </div>
     </div>
 
-    <button class="xls" onclick="descargarExcel()">Descargar reporte</button>
+    <div class="row" style="margin-bottom: 5px;">
+      <button class="xls" style="flex: 1; width: auto; margin-bottom: 0;" onclick="descargarExcel('hoy')">Descargar reporte de HOY</button>
+      <button class="xls" style="flex: 1; width: auto; margin-bottom: 0; background-color: #0d47a1;" onclick="descargarExcel('pasadas')">Descargar historial PASADAS</button>
+    </div>
+    
     <button class="clear" onclick="limpiarRegistros()">Limpiar historial</button>
 
-    <table id="tabla">
-      <thead>
-        <tr>
-          <th>Cédula</th>
-          <th>Nombre</th>
-          <th>Maquila</th>
-          <th>Fecha</th>
-          <th>Ingreso</th>
-          <th>Salida</th>
-          <th>Tiempo Laborado</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+    <div style="overflow-x: auto;">
+      <table id="tabla">
+        <thead>
+          <tr>
+            <th>Cédula</th>
+            <th>Nombre</th>
+            <th>Maquila</th>
+            <th>Fecha</th>
+            <th>Ingreso</th>
+            <th>Salida</th>
+            <th>Tiempo Laborado</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
   </div>
 
   <script>
@@ -284,9 +290,20 @@
       document.getElementById('cedula').focus();
     }
 
+    // Separar registros del día a día de los pasados
     function renderizarTabla() {
         const tbody = document.querySelector('#tabla tbody');
-        tbody.innerHTML = registrosLocal.slice().reverse().map(reg => {
+        const fechaHoy = new Date().toLocaleDateString();
+        
+        // Invertir el arreglo para mostrar los más recientes arriba
+        const registrosReversos = registrosLocal.slice().reverse();
+        
+        // Filtrar por los de hoy y los del pasado
+        const registrosHoy = registrosReversos.filter(reg => reg.fecha === fechaHoy);
+        const registrosPasados = registrosReversos.filter(reg => reg.fecha !== fechaHoy);
+
+        // Función auxiliar para mapear el HTML de las filas para no repetir código
+        const mapearFila = (reg) => {
             const claseSalida = reg.horaSalida === 'Pendiente' ? 'pendiente' : 'completado';
             return `
             <tr>
@@ -298,17 +315,51 @@
                 <td class="${claseSalida}">${reg.horaSalida}</td>
                 <td style="font-weight:bold;">${reg.tiempoLaborado}</td>
             </tr>
-        `}).join('');
+            `;
+        };
+
+        // Construir el HTML de los de hoy
+        let htmlFinal = registrosHoy.map(mapearFila).join('');
+
+        // Si hay registros pasados, insertar el separador y luego las filas pasadas
+        if (registrosPasados.length > 0) {
+            htmlFinal += `
+            <tr>
+                <td colspan="7" style="background-color: #e0e0e0; font-weight: bold; font-size: 14px; padding: 12px; border-top: 2px solid #aaa; border-bottom: 2px solid #aaa; text-transform: uppercase;">
+                    ⬇ HISTORIAL DE MARCACIONES PASADAS ⬇
+                </td>
+            </tr>
+            ` + registrosPasados.map(mapearFila).join('');
+        }
+
+        tbody.innerHTML = htmlFinal;
     }
 
-    function descargarExcel() {
+    // MODIFICADO: Filtrar los datos según el botón presionado
+    function descargarExcel(tipo) {
+      const fechaHoy = new Date().toLocaleDateString();
+      let registrosFiltrados = [];
+
+      if (tipo === 'hoy') {
+          registrosFiltrados = registrosLocal.filter(r => r.fecha === fechaHoy);
+      } else if (tipo === 'pasadas') {
+          registrosFiltrados = registrosLocal.filter(r => r.fecha !== fechaHoy);
+      }
+
+      if (registrosFiltrados.length === 0) {
+          alert('No hay datos para exportar en esta categoría.');
+          return;
+      }
+
       // Filtrar datos para que no salga el ID interno de firebase
-      const datosParaExcel = registrosLocal.map(({idFirebase, timestampIngreso, ...resto}) => resto);
+      const datosParaExcel = registrosFiltrados.map(({idFirebase, timestampIngreso, ...resto}) => resto);
       
       const ws = XLSX.utils.json_to_sheet(datosParaExcel);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Asistencia");
-      XLSX.writeFile(wb, 'marcaciones_maquila.xlsx');
+      
+      const nombreArchivo = tipo === 'hoy' ? 'marcaciones_hoy.xlsx' : 'historial_pasadas.xlsx';
+      XLSX.writeFile(wb, nombreArchivo);
     }
 
     function limpiarRegistros() {
