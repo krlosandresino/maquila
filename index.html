@@ -78,8 +78,11 @@
     <div class="row">
       <button class="in" onclick="registrar('Ingreso')">Registrar Ingreso</button>
       <button class="out" onclick="registrar('Salida')">Registrar Salida</button>
+      
+      <!-- MODIFICADO: Agregado el contenedor para el Mini-Resumen -->
       <div class="contador-container">
-        Ingresados hoy: <span id="num-contador">0</span>
+        <div>Ingresados hoy: <span id="num-contador">0</span></div>
+        <div id="resumen-maquila" style="font-size: 11px; font-weight: normal; color: #e0e0e0; margin-top: 4px; display: none;"></div>
       </div>
     </div>
 
@@ -212,10 +215,38 @@
     });
 
     // --- 5. LÓGICA DE REGISTRO ---
+    
+    // MODIFICADO: Lógica añadida para generar el desglose por maquila
     function actualizarContador() {
         const fechaHoy = new Date().toLocaleDateString();
-        const totalHoy = registrosLocal.filter(r => r.fecha === fechaHoy).length;
-        document.getElementById('num-contador').innerText = totalHoy;
+        const registrosHoy = registrosLocal.filter(r => r.fecha === fechaHoy);
+        
+        // Actualizar el número total de ingresados
+        document.getElementById('num-contador').innerText = registrosHoy.length;
+
+        // Calcular fuerza laboral en piso (los que siguen con salida Pendiente)
+        const enPiso = registrosHoy.filter(r => r.horaSalida === 'Pendiente');
+        
+        let dprisa = 0, ht = 0, seripro = 0, otros = 0;
+        
+        enPiso.forEach(r => {
+            if (r.procedencia === 'Dprisa') dprisa++;
+            else if (r.procedencia === 'H&T') ht++;
+            else if (r.procedencia === 'Seripro') seripro++;
+            else otros++;
+        });
+
+        const resumenDiv = document.getElementById('resumen-maquila');
+        
+        // Si hay alguien trabajando hoy, mostramos el texto
+        if (registrosHoy.length > 0) {
+            resumenDiv.style.display = 'block';
+            let texto = `En piso: Dprisa: ${dprisa} | H&T: ${ht} | Seripro: ${seripro}`;
+            if (otros > 0) texto += ` | Otros: ${otros}`;
+            resumenDiv.innerText = texto;
+        } else {
+            resumenDiv.style.display = 'none';
+        }
     }
 
     function registrar(accion) {
@@ -290,7 +321,7 @@
       document.getElementById('cedula').focus();
     }
 
-    // MODIFICADO: Sistema de cierre automático de turnos olvidados
+    // Sistema de cierre automático de turnos olvidados
     function verificarTurnosOlvidados() {
         const ahoraMs = new Date().getTime();
         const limiteMs = 14 * 60 * 60 * 1000; // 14 horas en milisegundos
