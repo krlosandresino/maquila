@@ -290,6 +290,25 @@
       document.getElementById('cedula').focus();
     }
 
+    // MODIFICADO: Sistema de cierre automático de turnos olvidados
+    function verificarTurnosOlvidados() {
+        const ahoraMs = new Date().getTime();
+        const limiteMs = 14 * 60 * 60 * 1000; // 14 horas en milisegundos
+
+        registrosLocal.forEach(reg => {
+            if (reg.horaSalida === 'Pendiente' && reg.timestampIngreso) {
+                if ((ahoraMs - reg.timestampIngreso) > limiteMs) {
+                    db.ref('registros/' + reg.idFirebase).update({
+                        horaSalida: 'Sin Salida',
+                        tiempoLaborado: 'No registrado'
+                    }).catch(err => console.error(err));
+                }
+            }
+        });
+    }
+    // Ejecutar la verificación automáticamente cada 60 segundos
+    setInterval(verificarTurnosOlvidados, 60000);
+
     // Separar registros del día a día de los pasados
     function renderizarTabla() {
         const tbody = document.querySelector('#tabla tbody');
@@ -304,7 +323,8 @@
 
         // Función auxiliar para mapear el HTML de las filas para no repetir código
         const mapearFila = (reg) => {
-            const claseSalida = reg.horaSalida === 'Pendiente' ? 'pendiente' : 'completado';
+            // Ajustamos la clase visual si dice "Sin Salida" para que se vea en rojo igual que "Pendiente"
+            const claseSalida = (reg.horaSalida === 'Pendiente' || reg.horaSalida === 'Sin Salida') ? 'pendiente' : 'completado';
             return `
             <tr>
                 <td>${reg.cedula}</td>
@@ -335,7 +355,7 @@
         tbody.innerHTML = htmlFinal;
     }
 
-    // MODIFICADO: Filtrar los datos según el botón presionado
+    // Filtrar los datos según el botón presionado
     function descargarExcel(tipo) {
       const fechaHoy = new Date().toLocaleDateString();
       let registrosFiltrados = [];
