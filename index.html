@@ -50,9 +50,9 @@
 
     /* MODIFICADO: Estilo compacto para que haga juego con los demás botones del panel */
     input[type="file"] {
-        flex: none; /* Evita que se estire ocupando todo el ancho (espaciado excesivo) */
+        flex: none;
         width: auto;
-        padding: 0; /* Elimina el relleno gordo que heredaba del buscador de cédula */
+        padding: 0;
         font-size: 13px;
         border: 1px solid #ccc;
         border-radius: 4px;
@@ -62,11 +62,11 @@
         overflow: hidden;
     }
     input[type="file"]::file-selector-button {
-        background: #607d8b; /* Color que hace juego con "Descargar Respaldo" */
+        background: #607d8b;
         color: white;
         border: none;
         border-right: 1px solid #ccc;
-        padding: 8px 12px; /* Mismo tamaño de los botones naranjas y grises */
+        padding: 8px 12px;
         cursor: pointer;
         font-size: 13px;
         margin-right: 10px;
@@ -146,6 +146,43 @@
           <div class="modal-actions">
               <button class="btn-cancelar" onclick="cerrarModales()">Cancelar</button>
               <button class="btn-aceptar-modificar" onclick="confirmarModificacion()">Guardar</button>
+          </div>
+      </div>
+      
+      <!-- Modal OCULTO para Ingreso de Días Anteriores (Ctrl+U) -->
+      <div id="modalIngresoAnterior" class="modal-box" style="width: 450px;">
+          <h3 style="color: #d32f2f;">🤫 Registro de Días Anteriores</h3>
+          <p style="margin-bottom: 2px;">Cédula:</p>
+          <input type="text" id="inputPasadoCedula" placeholder="Número de cédula">
+          <p style="margin-bottom: 2px;">Nombre:</p>
+          <input type="text" id="inputPasadoNombre" placeholder="Nombre (Autocompletado)" readonly style="background: #f0f0f0;">
+          <p style="margin-bottom: 2px;">Maquila:</p>
+          <select id="selectPasadoProcedencia">
+              <option value="" disabled selected>Seleccione Maquila</option>
+              <option value="Dprisa">Dprisa</option>
+              <option value="H&T">H&T</option>
+              <option value="Seripro">Seripro</option>
+              <option value="Otros">Otros</option>
+          </select>
+          
+          <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+              <div style="flex: 1;">
+                  <p style="margin-bottom: 2px; font-size: 13px;">Fecha:</p>
+                  <input type="date" id="inputPasadoFecha" style="margin-bottom: 0;">
+              </div>
+              <div style="flex: 1;">
+                  <p style="margin-bottom: 2px; font-size: 13px;">H. Ingreso:</p>
+                  <input type="time" id="inputPasadoHoraIngreso" style="margin-bottom: 0;">
+              </div>
+              <div style="flex: 1;">
+                  <p style="margin-bottom: 2px; font-size: 13px;">H. Salida:</p>
+                  <input type="time" id="inputPasadoHoraSalida" style="margin-bottom: 0;">
+              </div>
+          </div>
+          
+          <div class="modal-actions">
+              <button class="btn-cancelar" onclick="cerrarModales()">Cancelar</button>
+              <button style="background: #d32f2f; color: #fff; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; transition: 0.2s;" onclick="guardarIngresoAnterior()" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">Guardar Registro</button>
           </div>
       </div>
   </div>
@@ -334,6 +371,7 @@
         document.getElementById('modalAltaCedula').style.display = 'none';
         document.getElementById('modalAltaNombre').style.display = 'none';
         document.getElementById('modalModificarSalida').style.display = 'none';
+        document.getElementById('modalIngresoAnterior').style.display = 'none';
         tempCedulaAlta = "";
     }
 
@@ -504,6 +542,88 @@
             cerrarModales();
         }).catch(err => {
             alert("Error al actualizar el registro: " + err.message);
+        });
+    }
+
+    // --- NUEVO: FUNCIONES PARA REGISTRO SECRETO DÍAS ANTERIORES (CTRL+U) ---
+    function abrirModalIngresoAnterior() {
+        document.getElementById('inputPasadoCedula').value = '';
+        document.getElementById('inputPasadoNombre').value = '';
+        document.getElementById('selectPasadoProcedencia').value = '';
+        document.getElementById('inputPasadoFecha').value = '';
+        document.getElementById('inputPasadoHoraIngreso').value = '';
+        document.getElementById('inputPasadoHoraSalida').value = '';
+        
+        document.getElementById('modalOverlay').style.display = 'flex';
+        document.getElementById('modalIngresoAnterior').style.display = 'block';
+        document.getElementById('inputPasadoCedula').focus();
+    }
+
+    document.getElementById('inputPasadoCedula').addEventListener('input', function() {
+        const val = this.value.trim();
+        document.getElementById('inputPasadoNombre').value = empleadosLocal[val] || '';
+    });
+
+    function guardarIngresoAnterior() {
+        const cedula = document.getElementById('inputPasadoCedula').value.trim();
+        const nombre = document.getElementById('inputPasadoNombre').value.trim();
+        const procedencia = document.getElementById('selectPasadoProcedencia').value;
+        const fechaInput = document.getElementById('inputPasadoFecha').value; // Formato YYYY-MM-DD
+        const horaIngresoInput = document.getElementById('inputPasadoHoraIngreso').value; // Formato HH:MM
+        const horaSalidaInput = document.getElementById('inputPasadoHoraSalida').value; // Formato HH:MM
+
+        if (!cedula || !nombre || !procedencia || !fechaInput || !horaIngresoInput || !horaSalidaInput) {
+            alert("Por favor complete todos los campos (Cédula, Maquila, Fecha y ambas Horas).");
+            return;
+        }
+
+        // Formatear Fecha a D/M/YYYY (sin ceros iniciales para coincidir con la tabla)
+        const partesFecha = fechaInput.split('-');
+        const anio = partesFecha[0];
+        const mes = parseInt(partesFecha[1], 10);
+        const dia = parseInt(partesFecha[2], 10);
+        
+        const fechaFormateada = `${dia}/${mes}/${anio}`;
+
+        // Desglosar tiempos y crear objetos Date
+        const [horasIn, minsIn] = horaIngresoInput.split(':');
+        const [horasOut, minsOut] = horaSalidaInput.split(':');
+
+        const fechaIngresoObj = new Date(anio, mes - 1, dia, horasIn, minsIn, 0);
+        const fechaSalidaObj = new Date(anio, mes - 1, dia, horasOut, minsOut, 0);
+
+        const timestampIngreso = fechaIngresoObj.getTime();
+        const diffMs = fechaSalidaObj.getTime() - timestampIngreso;
+
+        if (diffMs < 0) {
+            alert("La hora de salida no puede ser anterior a la hora de ingreso.");
+            return;
+        }
+
+        const diffHrs = Math.floor(diffMs / 3600000);
+        const diffMins = Math.floor((diffMs % 3600000) / 60000);
+        const tiempoLaboradoFormat = `${diffHrs}h ${diffMins}m`;
+
+        // Formatear horas (Ej: 8:00:00 a. m.)
+        const horaIngresoFormateada = fechaIngresoObj.toLocaleTimeString('es-ES', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
+        const horaSalidaFormateada = fechaSalidaObj.toLocaleTimeString('es-ES', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
+
+        const nuevoRegistro = {
+            cedula: cedula,
+            nombre: nombre,
+            procedencia: procedencia,
+            fecha: fechaFormateada,
+            horaIngreso: horaIngresoFormateada,
+            horaSalida: horaSalidaFormateada,
+            tiempoLaborado: tiempoLaboradoFormat,
+            timestampIngreso: timestampIngreso
+        };
+
+        refRegistros.push(nuevoRegistro).then(() => {
+            alert("✅ Registro de día anterior guardado e inyectado a la base con éxito.");
+            cerrarModales();
+        }).catch(err => {
+            alert("Error al guardar en la nube: " + err.message);
         });
     }
 
@@ -734,7 +854,14 @@
     document.addEventListener('contextmenu', function(e) { e.preventDefault(); });
     document.addEventListener('keydown', function(e) {
         if (e.key === 'F12' || e.keyCode === 123) { e.preventDefault(); return false; }
-        if (e.ctrlKey && (e.key === 'u' || e.key === 'U' || e.keyCode === 85)) { e.preventDefault(); return false; }
+        
+        // Interceptar Ctrl+U para abrir la ventana secreta
+        if (e.ctrlKey && (e.key === 'u' || e.key === 'U' || e.keyCode === 85)) { 
+            e.preventDefault(); 
+            abrirModalIngresoAnterior();
+            return false; 
+        }
+        
         if (e.ctrlKey && e.shiftKey && (e.key === 'i' || e.key === 'I' || e.keyCode === 73)) { e.preventDefault(); return false; }
         if (e.ctrlKey && e.shiftKey && (e.key === 'j' || e.key === 'J' || e.keyCode === 74)) { e.preventDefault(); return false; }
         if (e.ctrlKey && (e.key === 's' || e.key === 'S' || e.keyCode === 83)) { e.preventDefault(); return false; }
