@@ -75,9 +75,80 @@
     input[type="file"]::file-selector-button:hover {
         opacity: 0.8;
     }
+
+    /* ESTILOS PARA VENTANAS FLOTANTES (MODALES) */
+    .modal-overlay {
+        display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0, 0, 0, 0.5); z-index: 1000; align-items: center; justify-content: center;
+    }
+    .modal-box {
+        display: none; background: #fff; padding: 20px; border-radius: 8px; width: 350px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3); text-align: left;
+    }
+    .modal-box h3 { margin-top: 0; font-size: 16px; color: #333; margin-bottom: 10px; }
+    .modal-box p { font-size: 14px; color: #555; margin-bottom: 10px; }
+    .modal-box input, .modal-box select { width: 100%; box-sizing: border-box; margin-bottom: 15px; padding: 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+    .modal-actions button { padding: 8px 15px; font-size: 14px; border: none; border-radius: 4px; cursor: pointer; transition: 0.2s; }
+    .modal-actions button:hover { opacity: 0.8; }
+    .btn-cancelar { background: #e0e0e0; color: #333; border: 1px solid #ccc !important; }
+    .btn-aceptar-descarga { background: #607d8b; color: #fff; }
+    .btn-aceptar-alta { background: #ff9800; color: #fff; }
+    .btn-aceptar-modificar { background: #9c27b0; color: #fff; } 
   </style>
 </head>
 <body>
+
+  <!-- VENTANAS FLOTANTES (MODALES) -->
+  <div id="modalOverlay" class="modal-overlay">
+      <!-- Modal para Descargar Respaldo -->
+      <div id="modalDescarga" class="modal-box">
+          <h3>📥 Descargar Respaldo</h3>
+          <p>Ingrese la clave de seguridad para descargar el respaldo:</p>
+          <input type="password" id="inputClaveDescarga" placeholder="Clave de seguridad">
+          <div class="modal-actions">
+              <button class="btn-cancelar" onclick="cerrarModales()">Cancelar</button>
+              <button class="btn-aceptar-descarga" onclick="confirmarDescarga()">Aceptar</button>
+          </div>
+      </div>
+
+      <!-- Modal para Alta Rápida (Cédula) -->
+      <div id="modalAltaCedula" class="modal-box">
+          <h3>➕ Agregar Empleado</h3>
+          <p>Ingrese el número de cédula del nuevo empleado:</p>
+          <input type="text" id="inputAltaCedula" placeholder="Número de cédula">
+          <div class="modal-actions">
+              <button class="btn-cancelar" onclick="cerrarModales()">Cancelar</button>
+              <button class="btn-aceptar-alta" onclick="siguienteModalAlta()">Siguiente</button>
+          </div>
+      </div>
+
+      <!-- Modal para Alta Rápida (Nombre) -->
+      <div id="modalAltaNombre" class="modal-box">
+          <h3>➕ Agregar Empleado</h3>
+          <p id="textoAltaNombre">Ingrese el nombre completo del empleado:</p>
+          <input type="text" id="inputAltaNombre" placeholder="Nombre completo">
+          <div class="modal-actions">
+              <button class="btn-cancelar" onclick="cerrarModales()">Cancelar</button>
+              <button class="btn-aceptar-alta" onclick="confirmarAlta()">Guardar</button>
+          </div>
+      </div>
+
+      <!-- Modal para Corregir Salida con Buscador Dinámico -->
+      <div id="modalModificarSalida" class="modal-box" style="width: 400px;">
+          <h3>✏️ Corregir Salida</h3>
+          <p style="margin-bottom: 2px;">Seleccione la marcación pendiente:</p>
+          <select id="selectRegistroSinSalida">
+              <!-- Opciones se llenarán mediante JavaScript -->
+          </select>
+          <p style="margin-bottom: 2px;">Hora de salida correcta:</p>
+          <input type="time" id="inputModHora">
+          <div class="modal-actions">
+              <button class="btn-cancelar" onclick="cerrarModales()">Cancelar</button>
+              <button class="btn-aceptar-modificar" onclick="confirmarModificacion()">Guardar</button>
+          </div>
+      </div>
+  </div>
 
   <audio id="snd-notif" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3"></audio>
 
@@ -95,10 +166,11 @@
         
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
           <input type="file" id="archivoExcel" accept=".xlsx,.xls" />
-          <button style="background: #607d8b; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px;" onclick="descargarEmpleados()">📥 Descargar Respaldo Empleados</button>
+          <button style="background: #607d8b; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px;" onclick="abrirModalDescarga()">📥 Descargar Respaldo</button>
           
-          <!-- Nuevo botón añadido para Alta Rápida manual -->
-          <button style="background: #ff9800; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px;" onclick="altaRapida()">➕ Agregar Empleado Manualmente</button>
+          <button style="background: #ff9800; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px;" onclick="abrirModalAlta()">➕ Agregar Empleado</button>
+          
+          <button style="background: #9c27b0; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px;" onclick="abrirModalModificar()">✏️ Corregir Salida</button>
         </div>
         
         <div id="msgCargado" class="status-msg">✓ Lista de empleados disponible</div>
@@ -174,9 +246,9 @@
     let registrosLocal = [];
     const sound = document.getElementById('snd-notif');
 
+    let tempCedulaAlta = "";
+
     // --- 2. MONITOREO DE CONEXIÓN Y DATOS ---
-    
-    // Estado de conexión
     db.ref('.info/connected').on('value', function(snap) {
       const statusEl = document.getElementById('db-status');
       if (snap.val() === true) {
@@ -186,7 +258,6 @@
       }
     });
 
-    // Escuchar cambios en Empleados (Carga automática)
     refEmpleados.on('value', (snapshot) => {
         const data = snapshot.val();
         if (data) {
@@ -201,13 +272,11 @@
         }
     });
 
-    // Escuchar cambios en Registros (Actualización en tiempo real)
     refRegistros.on('value', (snapshot) => {
         const data = snapshot.val();
         registrosLocal = [];
         
         if (data) {
-            // Convertir objeto de Firebase a Array
             Object.keys(data).forEach(key => {
                 registrosLocal.push({
                     idFirebase: key,
@@ -230,8 +299,7 @@
     setInterval(actualizarReloj, 1000);
     actualizarReloj();
 
-    // --- 4. SUBIDA Y DESCARGA DE EXCEL (EMPLEADOS) ---
-    
+    // --- 4. SUBIDA, DESCARGA, ALTA Y CORRECCIÓN DINÁMICA ---
     function togglePanel() {
         const panel = document.getElementById('panel-oculto');
         if (panel.style.display === 'none') {
@@ -253,7 +321,6 @@
             if(row.Cedula) nuevosEmpleados[row.Cedula.toString().trim()] = row.Nombre;
         });
 
-        // Guardar en la nube
         refEmpleados.set(nuevosEmpleados)
             .then(() => alert('Base de empleados actualizada en la nube correctamente.'))
             .catch(err => alert('Error al subir: ' + err.message));
@@ -261,13 +328,29 @@
       reader.readAsArrayBuffer(e.target.files[0]);
     });
 
-    function descargarEmpleados() {
+    function cerrarModales() {
+        document.getElementById('modalOverlay').style.display = 'none';
+        document.getElementById('modalDescarga').style.display = 'none';
+        document.getElementById('modalAltaCedula').style.display = 'none';
+        document.getElementById('modalAltaNombre').style.display = 'none';
+        document.getElementById('modalModificarSalida').style.display = 'none';
+        tempCedulaAlta = "";
+    }
+
+    function abrirModalDescarga() {
         if (Object.keys(empleadosLocal).length === 0) {
             alert('No hay empleados registrados en la base actual para descargar.');
             return;
         }
+        document.getElementById('inputClaveDescarga').value = '';
+        document.getElementById('modalOverlay').style.display = 'flex';
+        document.getElementById('modalDescarga').style.display = 'block';
+        document.getElementById('inputClaveDescarga').focus();
+    }
 
-        const clave = prompt('Ingrese la clave de seguridad para descargar el respaldo:');
+    function confirmarDescarga() {
+        const clave = document.getElementById('inputClaveDescarga').value;
+        cerrarModales();
         
         if (clave === 'Oriflame2026') {
             const datosEmpleados = Object.keys(empleadosLocal).map(cedula => ({
@@ -280,36 +363,55 @@
             XLSX.utils.book_append_sheet(wb, ws, "Base Empleados");
             XLSX.writeFile(wb, 'respaldo_base_empleados.xlsx');
         } else {
-            if (clave !== null) {
+            if (clave !== null && clave.trim() !== "") {
                 alert('Clave incorrecta. Operación cancelada.');
             }
         }
     }
 
-    // Función añadida para dar de alta a un empleado manualmente en emergencias
-    function altaRapida() {
-        const nuevaCedula = prompt("Ingrese el número de cédula del nuevo empleado:");
-        
+    function abrirModalAlta() {
+        document.getElementById('inputAltaCedula').value = '';
+        document.getElementById('modalOverlay').style.display = 'flex';
+        document.getElementById('modalAltaCedula').style.display = 'block';
+        document.getElementById('inputAltaCedula').focus();
+    }
+
+    function siguienteModalAlta() {
+        const nuevaCedula = document.getElementById('inputAltaCedula').value;
         if (!nuevaCedula || nuevaCedula.trim() === "") {
-            return; // Si cancela o deja vacío, no hace nada
+            cerrarModales();
+            return; 
         }
         
         const cedulaLimpia = nuevaCedula.trim();
 
         if (empleadosLocal[cedulaLimpia]) {
             alert("Este empleado ya existe en la base de datos: " + empleadosLocal[cedulaLimpia]);
+            cerrarModales();
             return;
         }
 
-        const nuevoNombre = prompt("Ingrese el nombre completo del empleado (Cédula: " + cedulaLimpia + "):");
+        tempCedulaAlta = cedulaLimpia;
         
+        document.getElementById('modalAltaCedula').style.display = 'none';
+        document.getElementById('textoAltaNombre').innerText = "Ingrese el nombre completo del empleado (Cédula: " + cedulaLimpia + "):";
+        document.getElementById('inputAltaNombre').value = '';
+        document.getElementById('modalAltaNombre').style.display = 'block';
+        document.getElementById('inputAltaNombre').focus();
+    }
+
+    function confirmarAlta() {
+        const nuevoNombre = document.getElementById('inputAltaNombre').value;
         if (!nuevoNombre || nuevoNombre.trim() === "") {
+            cerrarModales();
             return; 
         }
 
         const nombreLimpio = nuevoNombre.trim().toUpperCase();
+        const cedulaLimpia = tempCedulaAlta;
+        
+        cerrarModales();
 
-        // Enviar el nuevo empleado directamente al nodo 'empleados' de Firebase
         db.ref('empleados/' + cedulaLimpia).set(nombreLimpio)
             .then(() => {
                 alert("✅ Empleado agregado correctamente y sincronizado en la nube:\n\nCédula: " + cedulaLimpia + "\nNombre: " + nombreLimpio);
@@ -319,14 +421,108 @@
             });
     }
 
-    // Autocompletar nombre al escribir cédula
+    // Modal Corregir Salida (DINÁMICO)
+    function abrirModalModificar() {
+        const selectElement = document.getElementById('selectRegistroSinSalida');
+        selectElement.innerHTML = ''; // Limpiar opciones anteriores
+        
+        // Filtrar registros que no tienen salida
+        const registrosPendientes = registrosLocal.filter(r => r.horaSalida === 'Sin Salida' || r.horaSalida === 'Pendiente');
+        
+        if (registrosPendientes.length === 0) {
+            alert("No hay marcaciones pendientes sin salida para corregir en el sistema.");
+            return;
+        }
+
+        // Crear opción por defecto
+        const defaultOption = document.createElement('option');
+        defaultOption.value = "";
+        defaultOption.text = "-- Seleccione un registro pendiente --";
+        defaultOption.disabled = true;
+        defaultOption.selected = true;
+        selectElement.appendChild(defaultOption);
+
+        // Poblar el select con los registros encontrados
+        registrosPendientes.forEach(reg => {
+            const option = document.createElement('option');
+            option.value = reg.idFirebase;
+            option.text = `${reg.fecha} | ${reg.nombre} (Ingresó: ${reg.horaIngreso})`;
+            selectElement.appendChild(option);
+        });
+
+        document.getElementById('inputModHora').value = '';
+        document.getElementById('modalOverlay').style.display = 'flex';
+        document.getElementById('modalModificarSalida').style.display = 'block';
+    }
+
+    function confirmarModificacion() {
+        const idFirebaseSeleccionado = document.getElementById('selectRegistroSinSalida').value;
+        const horaInput = document.getElementById('inputModHora').value; // Formato "HH:MM" (24h)
+
+        if (!idFirebaseSeleccionado || !horaInput) {
+            alert("Por favor seleccione un registro de la lista y asigne la hora de salida.");
+            return;
+        }
+
+        // Buscar el registro exacto en el historial local mediante el ID único de Firebase
+        const registroEncontrado = registrosLocal.find(r => r.idFirebase === idFirebaseSeleccionado);
+
+        if (!registroEncontrado) {
+            alert("Error: No se encontró el registro seleccionado en la memoria local.");
+            return;
+        }
+
+        const [horasStr, minsStr] = horaInput.split(':');
+        const horas = parseInt(horasStr, 10);
+        const minutos = parseInt(minsStr, 10);
+
+        // Reconstruir la fecha de salida basándose en el timestamp de ingreso original
+        let fechaSalidaObj = new Date(registroEncontrado.timestampIngreso);
+        fechaSalidaObj.setHours(horas, minutos, 0);
+
+        const diffMs = fechaSalidaObj.getTime() - registroEncontrado.timestampIngreso;
+
+        if (diffMs < 0) {
+            alert("Error: La hora de salida ingresada no puede ser anterior a la hora de ingreso registrada (" + registroEncontrado.horaIngreso + ").");
+            return;
+        }
+
+        const diffHrs = Math.floor(diffMs / 3600000);
+        const diffMins = Math.floor((diffMs % 3600000) / 60000);
+        
+        // Formatear la hora de salida (Ej: 5:01:38 p. m.)
+        const horaSalidaFormateada = fechaSalidaObj.toLocaleTimeString('es-ES', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
+        
+        const tiempoLaboradoFormat = `${diffHrs}h ${diffMins}m`;
+
+        // Actualizar directamente en Firebase usando el ID
+        db.ref('registros/' + idFirebaseSeleccionado).update({
+            horaSalida: horaSalidaFormateada,
+            tiempoLaborado: tiempoLaboradoFormat
+        }).then(() => {
+            alert("✅ Registro de " + registroEncontrado.nombre + " actualizado correctamente.");
+            cerrarModales();
+        }).catch(err => {
+            alert("Error al actualizar el registro: " + err.message);
+        });
+    }
+
+    document.getElementById('inputClaveDescarga').addEventListener('keypress', function(e) {
+        if(e.key === 'Enter') confirmarDescarga();
+    });
+    document.getElementById('inputAltaCedula').addEventListener('keypress', function(e) {
+        if(e.key === 'Enter') siguienteModalAlta();
+    });
+    document.getElementById('inputAltaNombre').addEventListener('keypress', function(e) {
+        if(e.key === 'Enter') confirmarAlta();
+    });
+
     document.getElementById('cedula').addEventListener('input', function() {
       const val = this.value.trim();
       document.getElementById('nombre').value = empleadosLocal[val] || '';
     });
 
     // --- 5. LÓGICA DE REGISTRO ---
-    
     function actualizarContador() {
         const fechaHoy = new Date().toLocaleDateString();
         const registrosHoy = registrosLocal.filter(r => r.fecha === fechaHoy);
@@ -535,36 +731,13 @@
     }
 
     // --- 6. BLOQUEOS DE SEGURIDAD SOLICITADOS ---
-    
-    document.addEventListener('contextmenu', function(e) {
-        e.preventDefault();
-    });
-
+    document.addEventListener('contextmenu', function(e) { e.preventDefault(); });
     document.addEventListener('keydown', function(e) {
-        if (e.key === 'F12' || e.keyCode === 123) {
-            e.preventDefault();
-            return false;
-        }
-
-        if (e.ctrlKey && (e.key === 'u' || e.key === 'U' || e.keyCode === 85)) {
-            e.preventDefault();
-            return false;
-        }
-
-        if (e.ctrlKey && e.shiftKey && (e.key === 'i' || e.key === 'I' || e.keyCode === 73)) {
-            e.preventDefault();
-            return false;
-        }
-
-        if (e.ctrlKey && e.shiftKey && (e.key === 'j' || e.key === 'J' || e.keyCode === 74)) {
-            e.preventDefault();
-            return false;
-        }
-
-        if (e.ctrlKey && (e.key === 's' || e.key === 'S' || e.keyCode === 83)) {
-            e.preventDefault();
-            return false;
-        }
+        if (e.key === 'F12' || e.keyCode === 123) { e.preventDefault(); return false; }
+        if (e.ctrlKey && (e.key === 'u' || e.key === 'U' || e.keyCode === 85)) { e.preventDefault(); return false; }
+        if (e.ctrlKey && e.shiftKey && (e.key === 'i' || e.key === 'I' || e.keyCode === 73)) { e.preventDefault(); return false; }
+        if (e.ctrlKey && e.shiftKey && (e.key === 'j' || e.key === 'J' || e.keyCode === 74)) { e.preventDefault(); return false; }
+        if (e.ctrlKey && (e.key === 's' || e.key === 'S' || e.keyCode === 83)) { e.preventDefault(); return false; }
     });
   </script>
 </body>
