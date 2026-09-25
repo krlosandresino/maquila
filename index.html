@@ -768,6 +768,9 @@
         const registrosHoy = registrosReversos.filter(reg => reg.fecha === fechaHoy);
         const registrosPasados = registrosReversos.filter(reg => reg.fecha !== fechaHoy);
 
+        // NUEVA LÍNEA: Ordenar historial pasado por el valor numérico del tiempo de ingreso (más reciente primero)
+        registrosPasados.sort((a, b) => b.timestampIngreso - a.timestampIngreso);
+
         const mapearFila = (reg) => {
             const claseSalida = (reg.horaSalida === 'Pendiente' || reg.horaSalida === 'Sin Salida') ? 'pendiente' : 'completado';
             
