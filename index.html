@@ -12,7 +12,8 @@
 
   <style>
     body { font-family: Arial, sans-serif; background: #f4f6f8; padding: 20px; }
-    .card { max-width: 1000px; margin: auto; background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    .card { max-width: 1000px; margin: auto; background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); position: relative; }
+    .marca-agua { position: absolute; top: 15px; right: 20px; font-size: 11px; color: #aaa; font-weight: bold; pointer-events: none; user-select: none; }
     h1 { text-align: center; margin-bottom: 5px; }
     
     #reloj {
@@ -190,6 +191,7 @@
   <audio id="snd-notif" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3"></audio>
 
   <div class="card">
+    <div class="marca-agua">© 2026 Desarrollado por Carlos Burgos</div>
     <h1>📔 Control de asistencias</h1>
     <div id="db-status">Iniciando sistema...</div>
     
