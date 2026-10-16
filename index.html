@@ -241,7 +241,7 @@
       <button class="xls" style="flex: 1; width: auto; margin-bottom: 0; background-color: #0d47a1;" onclick="descargarExcel('pasadas')">Descargar marcaciones PASADAS</button>
     </div>
     
-    <button class="clear" onclick="limpiarRegistros()">Limpiar todas las Marcaciones</button>
+    <button class="clear" onclick="limpiarRegistros()">Limpiar Marcaciones Pasadas</button>
 
     <div style="overflow-x: auto;">
       <table id="tabla">
@@ -844,10 +844,27 @@
     }
 
     function limpiarRegistros() {
-        if (confirm('Desea borrar los registros.\n¿Continuar?')) {
+        if (confirm('Desea borrar las marcaciones pasadas. Las marcaciones de hoy se mantendrán intactas.')) {
             const clave = prompt('Ingrese la clave de seguridad:');
             if (clave === 'Oriflame2026') {
-                refRegistros.remove();
+                const fechaHoy = new Date().toLocaleDateString();
+                const registrosPasados = registrosLocal.filter(r => r.fecha !== fechaHoy);
+
+                if (registrosPasados.length === 0) {
+                    alert('No hay marcaciones pasadas para eliminar.');
+                    return;
+                }
+
+                // Generar un objeto con las claves a borrar
+                let actualizaciones = {};
+                registrosPasados.forEach(reg => {
+                    actualizaciones[reg.idFirebase] = null;
+                });
+
+                // Actualizar (eliminar) multiples nodos en Firebase sin afectar los registros de hoy
+                refRegistros.update(actualizaciones)
+                    .then(() => alert('Historial de marcaciones pasadas eliminado correctamente.'))
+                    .catch(err => alert('Error al eliminar: ' + err.message));
             } else {
                 alert('Clave incorrecta. Operación cancelada.');
             }
