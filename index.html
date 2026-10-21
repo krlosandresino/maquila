@@ -221,8 +221,8 @@
         <option value="" disabled selected>Seleccione Maquila (Solo Ingreso)</option>
         <option value="Dprisa">Dprisa</option>
         <option value="H&T">H&T</option>
- 	<option value="Seripro">Seripro</option>
-	<option value="Otros">Otros</option>
+        <option value="Seripro">Seripro</option>
+        <option value="Otros">Otros</option>
       </select>
     </div>
 
@@ -282,16 +282,26 @@
 
     let empleadosLocal = {};
     let registrosLocal = [];
+    let conectadoNube = false;
+    let datosSincronizados = false;
     const sound = document.getElementById('snd-notif');
 
     let tempCedulaAlta = "";
+
+    // Función auxiliar para mantener formato de fecha uniforme en cualquier PC
+    function obtenerFechaHoyStr() {
+        const ahora = new Date();
+        return `${ahora.getDate()}/${ahora.getMonth() + 1}/${ahora.getFullYear()}`;
+    }
 
     // --- 2. MONITOREO DE CONEXIÓN Y DATOS ---
     db.ref('.info/connected').on('value', function(snap) {
       const statusEl = document.getElementById('db-status');
       if (snap.val() === true) {
+        conectadoNube = true;
         statusEl.innerHTML = 'Estado: <span class="online">● Conectado a la Nube</span>';
       } else {
+        conectadoNube = false;
         statusEl.innerHTML = 'Estado: <span class="offline">○ Desconectado (Revisar internet)</span>';
       }
     });
@@ -322,6 +332,7 @@
                 });
             });
         }
+        datosSincronizados = true;
         renderizarTabla();
         actualizarContador();
     });
@@ -546,7 +557,7 @@
         });
     }
 
-    // --- NUEVO: FUNCIONES PARA REGISTRO SECRETO DÍAS ANTERIORES (CTRL+U) ---
+    // --- FUNCIONES PARA REGISTRO SECRETO DÍAS ANTERIORES (CTRL+U) ---
     function abrirModalIngresoAnterior() {
         document.getElementById('inputPasadoCedula').value = '';
         document.getElementById('inputPasadoNombre').value = '';
@@ -643,10 +654,11 @@
       document.getElementById('nombre').value = empleadosLocal[val] || '';
     });
 
-    // --- 5. LÓGICA DE REGISTRO ---
+    // --- 5. LÓGICA DE REGISTRO EN LÍNEA PROTEGIDA ---
     function actualizarContador() {
-        const fechaHoy = new Date().toLocaleDateString();
-        const registrosHoy = registrosLocal.filter(r => r.fecha === fechaHoy);
+        const fechaHoy = obtenerFechaHoyStr();
+        const fechaHoyLocal = new Date().toLocaleDateString();
+        const registrosHoy = registrosLocal.filter(r => r.fecha === fechaHoy || r.fecha === fechaHoyLocal);
         
         document.getElementById('num-contador').innerText = registrosHoy.length;
 
@@ -673,14 +685,28 @@
         }
     }
 
+    function limpiarFormularioPrincipal() {
+        document.getElementById('cedula').value = '';
+        document.getElementById('nombre').value = '';
+        document.getElementById('procedencia').value = '';
+        document.getElementById('cedula').focus();
+    }
+
     function registrar(accion) {
+      if (!conectadoNube) {
+        sound.play();
+        alert('⚠️ Sin conexión a la nube. Verifique su internet antes de registrar.');
+        return;
+      }
+
       const cedula = document.getElementById('cedula').value.trim();
       const nombre = document.getElementById('nombre').value.trim();
       const procedenciaSeleccionada = document.getElementById('procedencia').value;
       
       const ahora = new Date();
-      const fechaHoy = ahora.toLocaleDateString();
-      const horaActualStr = ahora.toLocaleTimeString();
+      const fechaHoy = obtenerFechaHoyStr();
+      const fechaHoyLocal = ahora.toLocaleDateString();
+      const horaActualStr = ahora.toLocaleTimeString('es-ES', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
 
       if (!cedula) {
         alert('Ingrese una cédula'); return;
@@ -689,7 +715,8 @@
         sound.play(); alert('Empleado no encontrado en la base de datos.'); return;
       }
 
-      const registroExistente = registrosLocal.find(r => r.cedula === cedula && r.fecha === fechaHoy);
+      // Buscar registro de hoy (compatible con formato unificado y formato local)
+      const registroExistente = registrosLocal.find(r => r.cedula === cedula && (r.fecha === fechaHoy || r.fecha === fechaHoyLocal));
 
       if (accion === 'Ingreso') {
           if (!procedenciaSeleccionada) {
@@ -711,7 +738,12 @@
               timestampIngreso: ahora.getTime()
           };
           
-          refRegistros.push(nuevoRegistro).catch(err => alert("Error de red: " + err.message));
+          refRegistros.push(nuevoRegistro)
+              .then(() => {
+                  sound.play();
+                  limpiarFormularioPrincipal();
+              })
+              .catch(err => alert("Error de red al guardar ingreso: " + err.message));
 
       } else if (accion === 'Salida') {
           if (!registroExistente) {
@@ -729,29 +761,35 @@
           
           db.ref('registros/' + registroExistente.idFirebase).update({
               horaSalida: horaActualStr,
-              tiempoLaborado: `${diffHrs}h ${diffMins}m`
-          }).catch(err => alert("Error de red: " + err.message));
+              tiempoLaborado: `${diffHrs}h ${diffMins}m`,
+              timestampSalida: ahora.getTime()
+          }).then(() => {
+              sound.play();
+              limpiarFormularioPrincipal();
+          }).catch(err => alert("Error de red al guardar salida: " + err.message));
       }
-
-      sound.play();
-      
-      document.getElementById('cedula').value = '';
-      document.getElementById('nombre').value = '';
-      document.getElementById('procedencia').value = '';
-      document.getElementById('cedula').focus();
     }
 
+    // CORREGIDO: Usa transacción en la nube para jamás sobrescribir una salida ya marcada en otra PC
     function verificarTurnosOlvidados() {
+        if (!conectadoNube || !datosSincronizados) return;
+
         const ahoraMs = new Date().getTime();
         const limiteMs = 14 * 60 * 60 * 1000;
 
         registrosLocal.forEach(reg => {
             if (reg.horaSalida === 'Pendiente' && reg.timestampIngreso) {
                 if ((ahoraMs - reg.timestampIngreso) > limiteMs) {
-                    db.ref('registros/' + reg.idFirebase).update({
-                        horaSalida: 'Sin Salida',
-                        tiempoLaborado: 'No registrado'
-                    }).catch(err => console.error(err));
+                    const refReg = db.ref('registros/' + reg.idFirebase);
+                    refReg.transaction(registroActualEnNube => {
+                        if (registroActualEnNube && registroActualEnNube.horaSalida === 'Pendiente') {
+                            registroActualEnNube.horaSalida = 'Sin Salida';
+                            registroActualEnNube.tiempoLaborado = 'No registrado';
+                            return registroActualEnNube;
+                        }
+                        // Si en la nube ya tiene hora de salida, abortar el cambio para no borrarla
+                        return;
+                    }).catch(err => console.error("Error al verificar turno:", err));
                 }
             }
         });
@@ -760,14 +798,15 @@
 
     function renderizarTabla() {
         const tbody = document.querySelector('#tabla tbody');
-        const fechaHoy = new Date().toLocaleDateString();
+        const fechaHoy = obtenerFechaHoyStr();
+        const fechaHoyLocal = new Date().toLocaleDateString();
         
         const registrosReversos = registrosLocal.slice().reverse();
         
-        const registrosHoy = registrosReversos.filter(reg => reg.fecha === fechaHoy);
-        const registrosPasados = registrosReversos.filter(reg => reg.fecha !== fechaHoy);
+        const registrosHoy = registrosReversos.filter(reg => reg.fecha === fechaHoy || reg.fecha === fechaHoyLocal);
+        const registrosPasados = registrosReversos.filter(reg => reg.fecha !== fechaHoy && reg.fecha !== fechaHoyLocal);
 
-        // NUEVA LÍNEA: Ordenar historial pasado por el valor numérico del tiempo de ingreso (más reciente primero)
+        // Ordenar historial pasado por el valor numérico del tiempo de ingreso (más reciente primero)
         registrosPasados.sort((a, b) => b.timestampIngreso - a.timestampIngreso);
 
         const mapearFila = (reg) => {
@@ -813,13 +852,14 @@
     setInterval(renderizarTabla, 60000);
 
     function descargarExcel(tipo) {
-      const fechaHoy = new Date().toLocaleDateString();
+      const fechaHoy = obtenerFechaHoyStr();
+      const fechaHoyLocal = new Date().toLocaleDateString();
       let registrosFiltrados = [];
 
       if (tipo === 'hoy') {
-          registrosFiltrados = registrosLocal.filter(r => r.fecha === fechaHoy);
+          registrosFiltrados = registrosLocal.filter(r => r.fecha === fechaHoy || r.fecha === fechaHoyLocal);
       } else if (tipo === 'pasadas') {
-          registrosFiltrados = registrosLocal.filter(r => r.fecha !== fechaHoy);
+          registrosFiltrados = registrosLocal.filter(r => r.fecha !== fechaHoy && r.fecha !== fechaHoyLocal);
       }
 
       if (registrosFiltrados.length === 0) {
@@ -827,7 +867,7 @@
           return;
       }
 
-      const datosParaExcel = registrosFiltrados.map(({idFirebase, timestampIngreso, ...resto}) => {
+      const datosParaExcel = registrosFiltrados.map(({idFirebase, timestampIngreso, timestampSalida, ...resto}) => {
           let tiempoLimpio = resto.tiempoLaborado;
           if (resto.horaSalida === 'Pendiente') {
               tiempoLimpio = "En curso";
@@ -847,8 +887,9 @@
         if (confirm('Desea borrar las marcaciones pasadas. Las marcaciones de hoy se mantendrán intactas.')) {
             const clave = prompt('Ingrese la clave de seguridad:');
             if (clave === 'Oriflame2026') {
-                const fechaHoy = new Date().toLocaleDateString();
-                const registrosPasados = registrosLocal.filter(r => r.fecha !== fechaHoy);
+                const fechaHoy = obtenerFechaHoyStr();
+                const fechaHoyLocal = new Date().toLocaleDateString();
+                const registrosPasados = registrosLocal.filter(r => r.fecha !== fechaHoy && r.fecha !== fechaHoyLocal);
 
                 if (registrosPasados.length === 0) {
                     alert('No hay marcaciones pasadas para eliminar.');
